@@ -26,3 +26,6 @@ class RandomAgent(Agent):
 
     def new_episode(self) -> None:
         return
+
+    def save(self, directory_path: str) -> None:
+        return

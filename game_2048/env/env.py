@@ -4,9 +4,16 @@ import numpy as np
 from gym import spaces
 from typing import Tuple
 
+A = np.array([
+    [7, 6, 5, 4],
+    [6, 5, 4, 3],
+    [5, 4, 3, 2],
+    [4, 3, 2, 1]
+])
+
 class env_2048(gym.Env):
 
-    def __init__(self, winning_reward=5000.0, losing_reward=-5000.0) -> None:
+    def __init__(self, winning_reward=5000.0, losing_reward=-5000.0, use_matrix_reward=True) -> None:
         super().__init__()
 
         self.winning_reward = winning_reward
@@ -14,6 +21,7 @@ class env_2048(gym.Env):
         self.reward_range = (-np.infty, np.infty)
         self.player_action_space = spaces.Discrete(4) # 0: left, 1: up, 2: right, 3: down
         self.reset()
+        self.use_matrix_reward = use_matrix_reward
 
     def reset(self) -> None:
         self.grid = np.zeros((4, 4), dtype=int)
@@ -47,63 +55,57 @@ class env_2048(gym.Env):
         self.grid[indices_zeros[coord][0], indices_zeros[coord][1]] = number
 
     def on_left_action(self) -> float:
-        reward = 0.0
         for i in range(4):
             row = np.array([x for x in self.grid[i, :] if x != 0])
             for j in range(row.shape[0]):
                 if j < row.shape[0] - 1 and row[j] == row[j + 1]:
                     row[j] *= 2
-                    reward += row[j]
                     self.score += row[j]
                     row[j + 1: ] = np.pad(row[j + 2: ], pad_width=(0, 1), mode='constant', constant_values=(0, 0))
 
             self.grid[i, :] = np.pad(row, pad_width=(0, 4 - row.shape[0]), mode='constant', constant_values=(0, 0))
-        
-        return reward
 
     def on_right_action(self) -> float:
-        reward = 0.0
         for i in range(4):
             row = np.array([x for x in self.grid[i, :] if x != 0])
             for j in reversed(range(row.shape[0])):
                 if j > 0 and row[j] == row[j - 1]:
                     row[j] *= 2
-                    reward += row[j]
                     self.score += row[j]
                     row[:j] = np.pad(row[:j - 1], pad_width=(1, 0), mode='constant', constant_values=(0, 0))
 
             self.grid[i, :] = np.pad(row, pad_width=(4 - row.shape[0], 0), mode='constant', constant_values=(0, 0))
-        
-        return reward
 
     def on_up_action(self) -> float:
-        reward = 0.0
         for j in range(4):
             column = np.array([x for x in self.grid[:, j] if x != 0])
             for i in range(column.shape[0]):
                 if i < column.shape[0] - 1 and column[i] == column[i + 1]:
                     column[i] *= 2
-                    reward += column[i]
                     self.score += column[i]
                     column[i + 1: ] = np.pad(column[i + 2: ], pad_width=(0, 1), mode='constant', constant_values=(0, 0))
 
             self.grid[:, j] = np.pad(column, pad_width=(0, 4 - column.shape[0]), mode='constant', constant_values=(0, 0))
-        
-        return reward
 
     def on_down_action(self) -> float:
-        reward = 0.0
         for j in range(4):
             column = np.array([x for x in self.grid[:, j] if x != 0])
             for i in reversed(range(column.shape[0])):
                 if i > 0 and column[i] == column[i - 1]:
                     column[i] *= 2
-                    reward += column[i]
                     self.score += column[i]
                     column[:i] = np.pad(column[:i - 1], pad_width=(1, 0), mode='constant', constant_values=(0, 0))
 
             self.grid[:, j] = np.pad(column, pad_width=(4 - column.shape[0], 0), mode='constant', constant_values=(0, 0))
-        
+
+    def compute_reward(self) -> float:
+        reward = 0.0
+
+        for i in range(4):
+            for j in range(4):
+                weight = A[i, j] if self.use_matrix_reward else 1
+                reward += self.grid[i, j] * weight
+
         return reward
     
     def step(self, action: int) -> Tuple[np.ndarray, np.ndarray, bool, float, dict]:
@@ -123,10 +125,11 @@ class env_2048(gym.Env):
         self.introduce_new_number()        
         indices_zeros = self.get_empty_tile()
         self.done = not self.has_moves_left(indices_zeros)
-        
+        reward = self.compute_reward()
+
         if self.done:
             reward += self.winning_reward if np.max(self.grid) >= 2048 else self.losing_reward
-        
+
         return temp_grid, self.grid, self.done, reward, {}
     
     def is_action_valid(self, action: int) -> bool:

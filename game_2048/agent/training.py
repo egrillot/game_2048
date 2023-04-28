@@ -139,10 +139,6 @@ def espilon_greedy_search(
                     values = {
                         'cumulate rewards': total_reward,
                         'max reached': np.max(next_grid),
-                        'sucessfull actions count': successfull_action,
-                        'failed actions count': failed_action,
-                        'explore count': history['exploit -> explore'] + explore_count,
-                        'exploit count': exploit_count,
                         'model loss': np.mean(loss) if loss is not None else None
                     }
                 
@@ -175,6 +171,8 @@ def espilon_greedy_search(
         all_history.append(history)
         mean_loss.append(np.mean(loss) if loss is not None else None)
         agent.new_episode()
+        
+        agent.save('../game_2048/models/')
 
         if verbose > 0:
 
