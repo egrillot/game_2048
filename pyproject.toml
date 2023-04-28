@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "game-2048"
+version = "0.1.0"
+description = ""
+authors = ["egrillot <44230801+egrillot@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{include = "game_2048"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^1.24.2"
+gym = "^0.26.2"
+matplotlib = "^3.7.1"
+torch = "^2.0.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.22.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
