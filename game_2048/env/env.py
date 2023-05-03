@@ -38,7 +38,8 @@ class env_2048(gym.Env):
     def get_empty_tile(self) -> np.ndarray:
         return np.argwhere(self.grid == 0)
     
-    def has_moves_left(self, indices_zeros: np.ndarray) -> bool:
+    def has_moves_left(self) -> bool:
+        indices_zeros = self.get_empty_tile()
         if indices_zeros.shape[0] > 0:
             return True
 
@@ -50,11 +51,13 @@ class env_2048(gym.Env):
 
     def introduce_new_number(self) -> None:
         indices_zeros = np.argwhere(self.grid == 0)
+        if indices_zeros.shape[0] == 0:
+            raise ValueError("the grid has no empty tiles, grid:", self.grid)
         coord = np.random.randint(indices_zeros.shape[0])
         number = np.random.choice([2, 4], p=[0.8, 0.2])
         self.grid[indices_zeros[coord][0], indices_zeros[coord][1]] = number
 
-    def on_left_action(self) -> float:
+    def on_left_action(self) -> None:
         for i in range(4):
             row = np.array([x for x in self.grid[i, :] if x != 0])
             for j in range(row.shape[0]):
@@ -65,7 +68,7 @@ class env_2048(gym.Env):
 
             self.grid[i, :] = np.pad(row, pad_width=(0, 4 - row.shape[0]), mode='constant', constant_values=(0, 0))
 
-    def on_right_action(self) -> float:
+    def on_right_action(self) -> None:
         for i in range(4):
             row = np.array([x for x in self.grid[i, :] if x != 0])
             for j in reversed(range(row.shape[0])):
@@ -76,7 +79,7 @@ class env_2048(gym.Env):
 
             self.grid[i, :] = np.pad(row, pad_width=(4 - row.shape[0], 0), mode='constant', constant_values=(0, 0))
 
-    def on_up_action(self) -> float:
+    def on_up_action(self) -> None:
         for j in range(4):
             column = np.array([x for x in self.grid[:, j] if x != 0])
             for i in range(column.shape[0]):
@@ -87,7 +90,7 @@ class env_2048(gym.Env):
 
             self.grid[:, j] = np.pad(column, pad_width=(0, 4 - column.shape[0]), mode='constant', constant_values=(0, 0))
 
-    def on_down_action(self) -> float:
+    def on_down_action(self) -> None:
         for j in range(4):
             column = np.array([x for x in self.grid[:, j] if x != 0])
             for i in reversed(range(column.shape[0])):
@@ -123,8 +126,7 @@ class env_2048(gym.Env):
             reward = self.on_down_action()
 
         self.introduce_new_number()        
-        indices_zeros = self.get_empty_tile()
-        self.done = not self.has_moves_left(indices_zeros)
+        self.done = not self.has_moves_left()
         reward = self.compute_reward()
 
         if self.done:

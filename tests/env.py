@@ -43,3 +43,16 @@ def test_actions(nb_action=50):
         env.step(action=action)
         print('action : ', action)
         print(env.grid)
+
+def test_random_valid_action(nb_action=200):
+
+    env = env_2048()
+    print(env.grid)
+    move_count = 1
+
+    while not env.done and move_count < nb_action:
+        action = env.sample_valid_action()
+        env.step(action=action)
+        print('action : ', action)
+        print(env.grid)
+        move_count += 1
