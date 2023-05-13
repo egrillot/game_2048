@@ -1,18 +1,44 @@
 from .MCTS import MCTS, Node
-from .NeuralNet import NeuralNet
 from .State import State
-
 from ...env import env_2048
-from ...utils.progress_bar import ProgressBar
+from ...utils import ProgressBar
+from ...utils import build_training_overview
+from ..mcts import Naive_MCTS
+from ...utils import vectorize_action, vectorize_w
+from .MCTSAgent import MCTSAgent
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+def warm_up(
+    num_episodes: int,
+    neural_net: MCTSAgent,
+    saving_path: str,
+    naive_mcts_num_sample=20,
+    naive_mcts_depth=200
+) -> None:
+    print(f'Warm up, naive mcts sample={naive_mcts_num_sample}, naive mcts depth={naive_mcts_depth}\n')
+
+    for i in range(num_episodes):
+        print(f'Game {i+1}/{num_episodes}:\n')
+        naive_mcts = Naive_MCTS(num_sample=naive_mcts_num_sample, depth=naive_mcts_depth)
+
+        grids, actions, successfull_game = naive_mcts.play_game()
+        nb_move = len(actions)
+        print('\nTrainig...')
+        avg_loss = neural_net.train(
+            grids, 
+            [vectorize_action(action) for action in actions], 
+            vectorize_w(successfull_game, nb_move),
+            epochs=100
+        )
+        print(f"Average loss during the training after 100 epochs: {avg_loss}")
+        neural_net.save(f"{saving_path}warmed_up_model.pt")
+
 def train_deep_mcts(
     num_episodes: int,
-    num_warm_up: int,
     num_mcts_simulations: int,
-    neural_net: NeuralNet,
+    model: MCTSAgent,
     saving_path: str
 ) -> None:
 
@@ -21,10 +47,11 @@ def train_deep_mcts(
     training_losses = []
     max_tiles = []
     episode_lengths = []
+    overview = dict()
 
-    for episode in range(num_episodes + num_warm_up):
-        print(f'\nEpisode {episode + 1} {"(warm up)" if episode < num_warm_up else ""}:\n')
-        mcts = MCTS(neural_net, 1 if episode < num_warm_up else num_mcts_simulations, warm_up=episode < num_warm_up)
+    for episode in range(num_episodes):
+        print(f'\nEpisode {episode + 1}:\n')
+        mcts = MCTS(model, num_mcts_simulations)
         states, policy_targets, value_targets = [], [], []
         env.reset()
         state = State(env.grid)
@@ -61,21 +88,30 @@ def train_deep_mcts(
                 current_node = [child for child in current_node.children if child.state.last_move == best_move][0]
                 value_targets.append(current_node.value)
                 move_count += 1
-                pbar.update({'max tile seen': max_tile_seen}, move_count)
+                pbar.update({'max tile seen': max_tile_seen, 'tree max depth': mcts.get_depth()}, move_count)
 
             else:
-                state = current_node.state.play_move()
+                state, _ = current_node.state.play_move()
                 child_node = Node(state, parent=current_node, policy=1.0)
                 current_node.children.append(child_node)
                 current_node = child_node
         
-        avg_loss = neural_net.train(states, policy_targets, value_targets)
+        max_tile = state.max_reached()
+        avg_loss = model.train(states, policy_targets, value_targets)
         training_losses.append(avg_loss)
         episode_lengths.append(move_count)
-        max_tiles.append(state.max_reached())
+        max_tiles.append(max_tile)
 
-        print(f'\n--- max tile reached: {state.max_reached()} --- move count: {move_count} --- average loss: {avg_loss}\n\n#########\n')
-        neural_net.save(f"{saving_path}MCTS_CNN_2048.pt")
+        if max_tile in overview:
+            overview[max_tile] += 1
+        else:
+            overview[max_tile] = 1
+
+        print(f'\n--- max tile reached: {max_tile} --- move count: {move_count} --- average loss: {avg_loss}\n\n#########\n')
+        with open(f"{saving_path}overview_training.txt", mode="w") as f:
+            f.write(build_training_overview(overview))
+        f.close()
+        model.save(f"{saving_path}MCTS_CNN_2048.pt")
 
     plt.figure(figsize=(12, 4))
 

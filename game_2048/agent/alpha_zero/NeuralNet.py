@@ -1,4 +1,5 @@
 from .State import State
+from .MCTSAgent import MCTSAgent
 
 from torch import Tensor
 import torch.nn.functional as F
@@ -8,7 +9,7 @@ import torch
 import torch.cuda
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
-from typing import Tuple, List
+from typing import Tuple, List, Union
 import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +71,7 @@ class Model(nn.Module):
 
         return self.policy(x), self.value(x)
     
-class NeuralNet:
+class NeuralNet(MCTSAgent):
 
     def __init__(self, model=None, learning_rate=0.001, weight_decay=1e-4, training=True) -> None:
         self.wrapper = Wrapper()
@@ -89,12 +90,12 @@ class NeuralNet:
 
         return policy, value
     
-    def train(self, states: List[State], policies: List[np.ndarray], values: List[float], batch_size=64, epochs=1) -> float:
+    def train(self, states: Union[List[State], List[np.ndarray]], policies: List[np.ndarray], values: List[float], batch_size=64, epochs=1) -> float:
         if not self.training:
             raise ValueError("This instance of NeuralNet is not set up for training.")
         
         n = len(states)
-        wrapped_states = [self.wrapper.get_state(state.grid) for state in states]
+        wrapped_states = [self.wrapper.get_state(state.grid) for state in states] if type(states[0]) == State else [self.wrapper.get_state(grid) for grid in states]
         wrapped_states = torch.tensor(np.array(wrapped_states), device=device).float()
         target_policies = torch.tensor(np.array(policies), device=device).float()
         target_values = torch.tensor(np.array(values), device=device).float()
@@ -103,6 +104,7 @@ class NeuralNet:
 
         for _ in range(epochs):
             permutation = torch.randperm(n)
+            batch_loss = 0.0
 
             for i in range(0, n, batch_size):
                 indices = permutation[i: i+ batch_size]
@@ -118,13 +120,15 @@ class NeuralNet:
                 value_loss = F.mse_loss(pred_values.squeeze(-1), batch_target_values)
 
                 loss = policy_loss + value_loss
-                total_loss += loss.item()
+                batch_loss += loss.item()
                 num_batches += 1
                 loss.backward()
                 clip_grad_norm_(self.model.parameters(), 5.0)
                 self.optimizer.step()
+            
+            total_loss += batch_loss / num_batches
         
-        return total_loss / num_batches
+        return total_loss / epochs
 
     def save(self, file_path):
         torch.save(self.model.state_dict(), file_path)

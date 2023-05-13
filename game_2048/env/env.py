@@ -13,27 +13,34 @@ A = np.array([
 
 class env_2048(gym.Env):
 
-    def __init__(self, winning_reward=5000.0, losing_reward=-5000.0, use_matrix_reward=True) -> None:
+    def __init__(self, winning_reward=5000.0, losing_reward=-5000.0, use_matrix_reward=True, initial_grid=None) -> None:
         super().__init__()
 
         self.winning_reward = winning_reward
         self.losing_reward = losing_reward
         self.reward_range = (-np.infty, np.infty)
         self.player_action_space = spaces.Discrete(4) # 0: left, 1: up, 2: right, 3: down
-        self.reset()
+        self.reset(initial_grid)
         self.use_matrix_reward = use_matrix_reward
 
-    def reset(self) -> None:
-        self.grid = np.zeros((4, 4), dtype=int)
-        coords1 = np.random.choice(np.arange(4), replace=True, size=2)
-        coords2 = np.random.choice(np.arange(4), replace=True, size=2)
-        while coords1[0] == coords2[0] and coords1[1] == coords2[1]:
-            coords2 = np.random.choice(np.arange(4), replace=True, size=2)
+    def reset(self, initial_grid: np.ndarray=None) -> None:
+        if initial_grid:
+            self.grid = initial_grid.copy()
 
-        self.grid[coords1[0], coords1[1]] = 2
-        self.grid[coords2[0], coords2[1]] = 2
+        else:
+            self.grid = np.zeros((4, 4), dtype=int)
+            coords1 = np.random.choice(np.arange(4), replace=True, size=2)
+            coords2 = np.random.choice(np.arange(4), replace=True, size=2)
+            while coords1[0] == coords2[0] and coords1[1] == coords2[1]:
+                coords2 = np.random.choice(np.arange(4), replace=True, size=2)
+
+            self.grid[coords1[0], coords1[1]] = 2
+            self.grid[coords2[0], coords2[1]] = 2
+
         self.score = 0
         self.done = False
+        self.history_grids = [self.grid.copy()]
+        self.history_actions = []
 
     def get_empty_tile(self) -> np.ndarray:
         return np.argwhere(self.grid == 0)
@@ -52,7 +59,13 @@ class env_2048(gym.Env):
     def introduce_new_number(self) -> None:
         indices_zeros = np.argwhere(self.grid == 0)
         if indices_zeros.shape[0] == 0:
-            raise ValueError("the grid has no empty tiles, grid:", self.grid)
+            message = ""
+            n = len(self.history_grids)
+            for i in range(n - 1, -1, -1):
+                message += f"\nLast grid:\n{self.history_grids[i]}" if i == n - 1 else f"\nGiven the grid:\n{self.history_grids[i]}\n\
+                    the choose action was: {self.history_actions[i]}"
+
+            raise ValueError(f"the grid has no empty tiles, decision making:{message}")
         coord = np.random.randint(indices_zeros.shape[0])
         number = np.random.choice([2, 4], p=[0.8, 0.2])
         self.grid[indices_zeros[coord][0], indices_zeros[coord][1]] = number
@@ -125,7 +138,9 @@ class env_2048(gym.Env):
         if action == 3:
             reward = self.on_down_action()
 
-        self.introduce_new_number()        
+        self.history_actions.append(action)
+        self.introduce_new_number()    
+        self.history_grids.append(self.grid)    
         self.done = not self.has_moves_left()
         reward = self.compute_reward()
 

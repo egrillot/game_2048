@@ -1,11 +1,12 @@
 from ..env import env_2048
 from ..utils import ProgressBar
+from .alpha_zero import NeuralNet
 
 from typing import Tuple, List
 import numpy as np
 from copy import deepcopy
 
-class MCTS:
+class Naive_MCTS:
 
     def __init__(self, num_sample=100, depth=50) -> None:
         self.num_sample = num_sample
@@ -35,7 +36,7 @@ class MCTS:
 
         return np.argmax(scores)
 
-    def play_game(self, game: int) -> Tuple[List[np.ndarray], List[int]]:
+    def play_game(self) -> Tuple[List[np.ndarray], List[int], bool]:
         actions = []
         grids = []
         env = env_2048()
@@ -45,7 +46,7 @@ class MCTS:
 
         pbar = ProgressBar(target=2000)
 
-        while env.has_moves_left():
+        while not env.done:
 
             action = self.chose_move(env)
             _, grid, _, _, _ = env.step(action)
@@ -53,22 +54,13 @@ class MCTS:
             max_tile = max(max_tile, np.max(grid))
 
             actions.append(action)
-            grids.append(grid)
+            if not env.done:
+                grids.append(grid)
 
             pbar.update({'max tile reached': max_tile, 'move count': step}, step)
             step += 1
 
         pbar.update({'max tile reached': max_tile, 'move count': step}, step)
-        print(f"\nGame {game} ended at {step} iterations - max tile reached : {max_tile}\n\n###################\n")
+        print(f"\nGame ended at {step} iterations - max tile reached : {max_tile}\n\n###################\n")
 
-        return grids, actions
-
-    def generate_dataset(self, game_number=50) -> List[Tuple[List[np.ndarray], List[int]]]:
-        res = []
-
-        for i in range(game_number):
-
-            grids, actions = self.play_game(game=i)
-            res.append((grids, actions))
-
-        return res
+        return grids, actions, max_tile >= 2048
